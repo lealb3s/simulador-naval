@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<style>
+body{margin:0;padding:8px;font:14px/1.4 system-ui,sans-serif;color:#254653}
+svg{display:block;width:100%;height:275px;touch-action:none;background:#f0f6f5;border:1px solid #cadada;border-radius:10px}
+.load{cursor:grab}.load:active{cursor:grabbing}
+text{pointer-events:none}#hint{margin:0 0 8px}
+</style>
+</head>
+<body>
+<div id="hint">Selecione um peso pelo marcador ou arraste-o para alterar X e Y.</div>
+<svg id="s" viewBox="0 0 900 290" aria-label="Planta para seleção e movimentação de cargas"></svg>
+<script>
+const svg = document.getElementById('s');
+let args = {cargas:[], comprimento:1, boca:1, contorno:[]};
+let selecionado = null;
+
+function enviar(type, dados) {
+  window.parent.postMessage({isStreamlitMessage:true, type, ...dados}, '*');
+}
+function elemento(nome, atributos, texto) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', nome);
+  for (const [chave, valor] of Object.entries(atributos)) el.setAttribute(chave, valor);
+  if (texto) el.textContent = texto;
+  return el;
+}
+function tela(x,y) {
+  return [40 + 820*x/args.comprimento, 145 - 215*y/args.boca];
+}
+function desenhar() {
+  svg.replaceChildren();
+  if (!(args.boca>0 && args.comprimento>0)) return;
+  const real = args.contorno && args.contorno.length>=3;
+  const contorno = real ? args.contorno.map(p=>tela(p.x_m,p.y_m))
+                        : [[40,37.5],[860,37.5],[860,252.5],[40,252.5]];
+  svg.append(elemento('polygon',{points:contorno.map(p=>p.join(',')).join(' '),
+                                fill:'#d7e9e7',stroke:'#167582','stroke-width':2}));
+  svg.append(elemento('line',{x1:40,y1:145,x2:860,y2:145,stroke:'#7e9d9e','stroke-dasharray':'6,5'}));
+  svg.append(elemento('text',{x:42,y:25,'font-size':13},'Boreste (+Y)'));
+  svg.append(elemento('text',{x:42,y:277,'font-size':13},'Bombordo (−Y)'));
+  svg.append(elemento('text',{x:855,y:25,'text-anchor':'end','font-size':12},
+                      real ? 'Contorno importado em planta' : 'Envelope nominal L × B'));
+  for (const c of args.cargas) {
+    const [x,y] = tela(c.x_m,c.y_m);
+    svg.append(elemento('circle',{cx:x,cy:y,r:11,fill:c.cor||'#147782',
+      stroke:c.id===selecionado?'#122d3a':'#fff','stroke-width':2.5,class:'load','data-id':c.id}));
+    svg.append(elemento('text',{x:x+13,y:y-9,'font-size':12},c.nome));
+  }
+}
+svg.addEventListener('pointerdown', e=>{
+  const id=e.target.getAttribute('data-id');
+  if (!id) return;
+  selecionado=id;
+  svg.setPointerCapture(e.pointerId);
+});
+svg.addEventListener('pointermove', e=>{
+  if (selecionado===null) return;
+  const c=args.cargas.find(c=>c.id===selecionado);
+  if (!c) return;
+  const p=svg.createSVGPoint();
+  p.x=e.clientX; p.y=e.clientY;
+  const pos=p.matrixTransform(svg.getScreenCTM().inverse());
+  c.x_m=Math.max(0,Math.min(args.comprimento,(pos.x-40)*args.comprimento/820));
+  c.y_m=Math.max(-args.boca/2,Math.min(args.boca/2,(145-pos.y)*args.boca/215));
+  desenhar();
+});
+svg.addEventListener('pointerup', ()=>{
+  const c=args.cargas.find(c=>c.id===selecionado);
+  if (c) enviar('streamlit:setComponentValue',{dataType:'json',value:{id:c.id,x_m:c.x_m,y_m:c.y_m,nonce:Date.now()}});
+  selecionado=null;
+});
+svg.addEventListener('pointercancel', ()=>{selecionado=null;desenhar();});
+window.addEventListener('message', e=>{
+  if (e.data.type==='streamlit:render') {
+    args=e.data.args;
+    desenhar();
+    enviar('streamlit:setFrameHeight',{height:332});
+  }
+});
+enviar('streamlit:componentReady',{apiVersion:1});
+enviar('streamlit:setFrameHeight',{height:332});
+</script>
+</body>
+</html>
