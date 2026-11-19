@@ -1,0 +1,4 @@
+id,nome,categoria,massa_kg,x_m,y_m,z_m,comp_m,larg_m,alt_m
+P1,Peso de vante,Peso inclinante,250,5,0,0.75,0.4,0.3,0.3
+P2,Peso de ré,Peso inclinante,250,3,0,0.75,0.4,0.3,0.3
+E1,Equipamento central,Equipamento,500,4,0,0.75,0.8,0.6,0.6
